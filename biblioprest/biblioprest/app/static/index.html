@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BiblioPrest</title>
+<link rel="icon" href="/static/logo.svg">
+<style>
+:root{--navy:#1F3A5F;--amber:#E8B04A;--bg:#EEF2F7;--card:#fff;--text:#1b2433;--muted:#5d6b82;--line:#d5dce8;--bad:#b3261e;--ok:#1e7a46}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 Georgia,"Times New Roman",serif;background:var(--bg);color:var(--text)}
+header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header img{width:44px;height:44px}
+header h1{margin:0;font-size:1.5rem;letter-spacing:.3px}
+header small{opacity:.75;display:block;font-size:.8rem}
+.fecha{margin-left:auto;font:.85rem system-ui,sans-serif;display:flex;gap:8px;align-items:center}
+main{max-width:1000px;margin:0 auto;padding:16px}
+nav{display:flex;gap:6px;margin-bottom:14px}
+nav button{font:600 .95rem system-ui,sans-serif;padding:9px 18px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;color:var(--navy)}
+nav button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+section{display:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+section.on{display:block}
+form,.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+input,select{font:.95rem system-ui,sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:6px;min-width:0}
+form .btn,button.btn{font:600 .9rem system-ui,sans-serif;background:var(--amber);color:#2a1d00;border:0;padding:9px 16px;border-radius:6px;cursor:pointer}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font:.9rem system-ui,sans-serif}
+th{text-align:left;color:var(--muted);font-weight:600;border-bottom:2px solid var(--line);padding:8px}
+td{padding:8px;border-bottom:1px solid var(--line)}
+td button{font:.8rem system-ui,sans-serif;border:1px solid var(--line);background:#fff;padding:4px 9px;border-radius:5px;cursor:pointer;margin-right:4px}
+td button:hover{border-color:var(--navy)}
+.tag{padding:2px 8px;border-radius:10px;font-size:.78rem}
+.tag.bad{background:#fbe3e1;color:var(--bad)}.tag.ok{background:#dff3e6;color:var(--ok)}
+.vacio{color:var(--muted);font-style:italic;padding:12px 8px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:11px 18px;border-radius:8px;color:#fff;font:.92rem system-ui,sans-serif;display:none;max-width:90%}
+#toast.bad{background:var(--bad)}#toast.ok{background:var(--ok)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--amber);outline-offset:1px}
+</style>
+</head>
+<body>
+<header>
+  <img src="/static/logo.svg" alt="Logo BiblioPrest">
+  <div><h1>BiblioPrest</h1><small>Préstamos de biblioteca</small></div>
+  <label class="fecha">Fecha de hoy (simulada) <input type="date" id="hoy"></label>
+</header>
+<main>
+<nav>
+  <button data-t="libros" class="on">Libros</button>
+  <button data-t="socios">Socios</button>
+  <button data-t="prestamos">Préstamos</button>
+</nav>
+
+<section id="libros" class="on">
+  <form id="f-libro">
+    <input name="isbn" placeholder="ISBN" required>
+    <input name="titulo" placeholder="Título" required>
+    <input name="autor" placeholder="Autor" required>
+    <input name="copias_totales" type="number" min="1" value="1" style="width:90px" required>
+    <button class="btn">Agregar libro</button>
+  </form>
+  <div class="bar"><input id="q" placeholder="Buscar por título, autor o ISBN" style="flex:1"></div>
+  <div class="wrap"><table><thead><tr><th>Título</th><th>Autor</th><th>ISBN</th><th>Disponibles</th><th></th></tr></thead><tbody id="t-libros"></tbody></table></div>
+</section>
+
+<section id="socios">
+  <form id="f-socio">
+    <input name="nombre" placeholder="Nombre completo" required>
+    <input name="documento" placeholder="Documento" required>
+    <select name="tipo"><option value="ESTUDIANTE">Estudiante</option><option value="DOCENTE">Docente</option><option value="EXTERNO">Externo</option></select>
+    <button class="btn">Agregar socio</button>
+  </form>
+  <div class="wrap"><table><thead><tr><th>Nombre</th><th>Documento</th><th>Tipo</th><th>Multas</th><th>Estado</th><th></th></tr></thead><tbody id="t-socios"></tbody></table></div>
+</section>
+
+<section id="prestamos">
+  <form id="f-prestamo">
+    <select name="libro_id" id="s-libro" required></select>
+    <select name="socio_id" id="s-socio" required></select>
+    <button class="btn">Prestar libro</button>
+  </form>
+  <div class="bar"><select id="estado"><option value="activo">Activos</option><option value="vencido">Vencidos</option><option value="">Historial completo</option></select></div>
+  <div class="wrap"><table><thead><tr><th>Libro</th><th>Socio</th><th>Prestado</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody id="t-prestamos"></tbody></table></div>
+</section>
+</main>
+<div id="toast" role="status"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const hoy = $('#hoy'); hoy.value = new Date().toISOString().slice(0, 10);
+const money = n => '$' + n.toLocaleString('es-AR');
+
+function toast(msg, ok) {
+  const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : 'bad'; t.style.display = 'block';
+  clearTimeout(toast.id); toast.id = setTimeout(() => t.style.display = 'none', 3500);
+}
+async function api(method, url, body) {
+  const r = await fetch('/api' + url, {method, headers: {'Content-Type': 'application/json'}, body: body && JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(typeof data.detail === 'string' ? data.detail : 'Revisá los datos ingresados.'); throw 0; }
+  return data;
+}
+const rows = (el, items, fn, cols) => $(el).innerHTML = items.length ? items.map(fn).join('') : `<tr><td colspan="${cols}" class="vacio">Todavía no hay registros.</td></tr>`;
+
+async function libros() {
+  const l = await api('GET', '/libros?q=' + encodeURIComponent($('#q').value));
+  rows('#t-libros', l, x => `<tr><td>${x.titulo}</td><td>${x.autor}</td><td>${x.isbn}</td>
+    <td>${x.copias_disponibles} de ${x.copias_totales}</td><td><button onclick="eliminarLibro(${x.id})">Eliminar</button></td></tr>`, 5);
+}
+async function socios() {
+  const s = await api('GET', '/socios');
+  rows('#t-socios', s, x => `<tr><td>${x.nombre}</td><td>${x.documento}</td><td>${x.tipo.toLowerCase()}</td>
+    <td>${x.saldo_multas ? `<span class="tag bad">${money(x.saldo_multas)}</span>` : '—'}</td>
+    <td>${x.activo ? '<span class="tag ok">activo</span>' : 'de baja'}</td>
+    <td>${x.saldo_multas ? `<button onclick="pagar(${x.id},${x.saldo_multas})">Registrar pago</button>` : ''}
+    ${x.activo ? `<button onclick="baja(${x.id})">Dar de baja</button>` : ''}</td></tr>`, 6);
+}
+async function prestamos() {
+  const [l, s, p] = await Promise.all([api('GET', '/libros'), api('GET', '/socios'),
+    api('GET', `/prestamos?estado=${$('#estado').value}&hoy=${hoy.value}`)]);
+  $('#s-libro').innerHTML = '<option value="">Elegí un libro</option>' + l.filter(x => x.copias_disponibles > 0).map(x => `<option value="${x.id}">${x.titulo} (${x.copias_disponibles})</option>`).join('');
+  $('#s-socio').innerHTML = '<option value="">Elegí un socio</option>' + s.filter(x => x.activo).map(x => `<option value="${x.id}">${x.nombre}</option>`).join('');
+  rows('#t-prestamos', p, x => `<tr><td>${x.libro}</td><td>${x.socio}</td><td>${x.fecha_prestamo}</td><td>${x.fecha_vencimiento}</td>
+    <td>${x.fecha_devolucion ? `devuelto${x.multa ? ' · multa ' + money(x.multa) : ''}` : x.vencido ? '<span class="tag bad">vencido</span>' : '<span class="tag ok">vigente</span>'}${x.renovado ? ' · renovado' : ''}</td>
+    <td>${x.fecha_devolucion ? '' : `<button onclick="renovar(${x.id})">Renovar</button><button onclick="devolver(${x.id})">Devolver</button>`}</td></tr>`, 6);
+}
+const refrescar = () => Promise.all([libros(), socios(), prestamos()]).catch(() => {});
+
+async function accion(promesa, ok) { try { await promesa; toast(ok, true); } catch {} refrescar(); }
+const eliminarLibro = id => confirm('¿Eliminar este libro?') && accion(api('DELETE', '/libros/' + id), 'Libro eliminado.');
+const baja = id => confirm('¿Dar de baja al socio?') && accion(api('DELETE', '/socios/' + id), 'Socio dado de baja.');
+const renovar = id => accion(api('POST', `/prestamos/${id}/renovar`, {fecha: hoy.value}), 'Préstamo renovado.');
+const pagar = (id, saldo) => { const m = parseInt(prompt('Monto a pagar (saldo ' + money(saldo) + '):', saldo)); if (m) accion(api('POST', `/socios/${id}/pagos`, {monto: m}), 'Pago registrado.'); };
+async function devolver(id) {
+  try { const r = await api('POST', `/prestamos/${id}/devolver`, {fecha: hoy.value});
+    toast(r.multa ? 'Libro devuelto con atraso. Multa: ' + money(r.multa) : 'Libro devuelto sin multa.', true); } catch {}
+  refrescar();
+}
+function enviar(form, url, ok, num = []) {
+  $(form).onsubmit = async e => {
+    e.preventDefault();
+    const b = Object.fromEntries(new FormData(e.target));
+    num.forEach(k => b[k] = +b[k]);
+    if (url === '/prestamos') b.fecha = hoy.value;
+    try { await api('POST', url, b); toast(ok, true); e.target.reset(); } catch {}
+    refrescar();
+  };
+}
+enviar('#f-libro', '/libros', 'Libro agregado.', ['copias_totales']);
+enviar('#f-socio', '/socios', 'Socio agregado.');
+enviar('#f-prestamo', '/prestamos', 'Préstamo registrado.', ['libro_id', 'socio_id']);
+$('#q').oninput = libros; $('#estado').onchange = prestamos; hoy.onchange = refrescar;
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button,section').forEach(e => e.classList.remove('on'));
+  b.classList.add('on'); $('#' + b.dataset.t).classList.add('on'); refrescar();
+});
+refrescar();
+</script>
+</body>
+</html>
